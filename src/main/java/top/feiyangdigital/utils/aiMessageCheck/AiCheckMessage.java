@@ -3,6 +3,7 @@ package top.feiyangdigital.utils.aiMessageCheck;
 import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson2.JSONObject;
 import com.unfbx.chatgpt.entity.chat.ChatChoice;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -24,6 +25,7 @@ import top.feiyangdigital.utils.groupCaptch.RestrictOrUnrestrictUser;
 
 import java.util.List;
 
+@Slf4j
 @Component
 public class AiCheckMessage {
 
@@ -87,9 +89,23 @@ public class AiCheckMessage {
             }
             List<ChatChoice> list = openAiApiService.getOpenAiAnalyzeResult(content);
             if (!list.isEmpty()) {
-                JSONObject jsonObject = JSONObject.parseObject(list.get(0).getMessage().getContent());
+                if (list.get(0).getMessage() == null || !StringUtils.hasText(list.get(0).getMessage().getContent())) {
+                    log.warn("AI检测返回内容为空，跳过本次检测。");
+                    return;
+                }
+                JSONObject jsonObject;
+                try {
+                    jsonObject = JSONObject.parseObject(list.get(0).getMessage().getContent());
+                } catch (Exception e) {
+                    log.warn("AI检测返回内容不是合法JSON，跳过本次检测。返回内容：{}", list.get(0).getMessage().getContent(), e);
+                    return;
+                }
                 Integer spamChance = jsonObject.getInteger("spamChance");
                 String spamReason = jsonObject.getString("spamReason");
+                if (spamChance == null) {
+                    log.warn("AI检测返回JSON缺少spamChance，跳过本次检测。返回内容：{}", jsonObject);
+                    return;
+                }
                 BotRecord botRecord1 = new BotRecord();
                 if (spamChance >= 6) {
                     String text = String.format("用户 <b><a href=\"tg://user?id=%d\">%s</a></b> 已被AI检测发送违规词，判断原因如下：\n<tg-spoiler>%s</tg-spoiler>", Long.valueOf(userId), firstName, spamReason);

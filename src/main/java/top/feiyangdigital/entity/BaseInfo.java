@@ -56,6 +56,20 @@ public class BaseInfo {
         return CONFIG.getJSONArray("openAIApiKey");
     }
 
+    public static String getOpenAIModel() {
+        String envModel = System.getenv("DEEPSEEK_MODEL");
+        if (envModel != null && !envModel.trim().isEmpty()) {
+            return envModel.trim();
+        }
+
+        String configModel = CONFIG.getString("openAIModel");
+        if (configModel != null && !configModel.trim().isEmpty()) {
+            return configModel.trim();
+        }
+
+        return "deepseek-v4-flash";
+    }
+
     public static String getApiServer(){
         return CONFIG.getString("api-server");
     }

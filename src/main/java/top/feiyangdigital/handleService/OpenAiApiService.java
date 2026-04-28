@@ -2,7 +2,6 @@ package top.feiyangdigital.handleService;
 
 import com.alibaba.fastjson2.JSONReader;
 import com.unfbx.chatgpt.OpenAiClient;
-import com.unfbx.chatgpt.entity.chat.BaseChatCompletion;
 import com.unfbx.chatgpt.entity.chat.ChatChoice;
 import com.unfbx.chatgpt.entity.chat.ChatCompletion;
 import com.unfbx.chatgpt.entity.chat.Message;
@@ -11,6 +10,7 @@ import com.unfbx.chatgpt.interceptor.DynamicKeyOpenAiAuthInterceptor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import top.feiyangdigital.entity.BaseInfo;
+import top.feiyangdigital.entity.DeepSeekChatCompletion;
 
 import java.util.Collections;
 import java.util.List;
@@ -83,20 +83,12 @@ public class OpenAiApiService {
             try {
                 String content = String.format(ANALYSIS_TEMPLATE, truncateString(text, 200));
                 Message message = Message.builder().role(Message.Role.SYSTEM).content(content).build();
-                ChatCompletion chatCompletion = ChatCompletion.builder()
-                        .maxTokens(2000)
-                        .model("deepseek-chat")
-                        .temperature(0.4)
-                        .topP(1.0)
-                        .presencePenalty(1)
-                        .responseFormat(
-                                ResponseFormat.builder()
-                                        .type(ResponseFormat.Type.JSON_OBJECT.getName())
-                                        .build()
-                        )
-                        .messages(Collections.singletonList(message))
-                        .build();
-                return createOpenAiClient().chatCompletion(chatCompletion).getChoices();
+                ChatCompletion chatCompletion = createChatCompletion(message);
+                List<ChatChoice> choices = createOpenAiClient().chatCompletion(chatCompletion).getChoices();
+                if (isEmptyResult(choices)) {
+                    throw new IllegalStateException("AI返回内容为空");
+                }
+                return choices;
             } catch (Exception e) {
                 attempt++;
                 log.error("OpenAI分析失败，尝试次数：{}，原因：{}", attempt, e.getMessage(), e);
@@ -108,6 +100,33 @@ public class OpenAiApiService {
         }
 
         return Collections.emptyList();  // 当达到最大尝试次数时返回空列表
+    }
+
+    private ChatCompletion createChatCompletion(Message message) {
+        DeepSeekChatCompletion chatCompletion = new DeepSeekChatCompletion();
+        chatCompletion.setModel(BaseInfo.getOpenAIModel());
+        chatCompletion.setMaxTokens(1000);
+        chatCompletion.setTemperature(0.2);
+        chatCompletion.setTopP(1.0);
+        chatCompletion.setPresencePenalty(0);
+        chatCompletion.setFrequencyPenalty(0);
+        chatCompletion.setThinking(Collections.singletonMap("type", "disabled"));
+        chatCompletion.setResponseFormat(
+                ResponseFormat.builder()
+                        .type(ResponseFormat.Type.JSON_OBJECT.getName())
+                        .build()
+        );
+        chatCompletion.setMessages(Collections.singletonList(message));
+        return chatCompletion;
+    }
+
+    private boolean isEmptyResult(List<ChatChoice> choices) {
+        if (choices == null || choices.isEmpty() || choices.get(0).getMessage() == null) {
+            return true;
+        }
+
+        String responseContent = choices.get(0).getMessage().getContent();
+        return responseContent == null || responseContent.trim().isEmpty();
     }
 
     private String truncateString(String input, int maxLength) {
