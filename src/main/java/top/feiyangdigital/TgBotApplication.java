@@ -19,6 +19,7 @@ import javax.annotation.PostConstruct;
 import java.util.Arrays;
 import java.util.List;
 
+
 @SpringBootApplication
 @EnableCaching
 @MapperScan("top.feiyangdigital.mapper")
